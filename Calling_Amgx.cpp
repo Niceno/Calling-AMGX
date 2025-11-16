@@ -8,7 +8,7 @@ nvc++ Calling_Amgx.cpp -o Calling_Amgx                                          
 -L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib/  \
 -lcublas -lcusparse -lcusolver -lnvJitLink
 
-   To run in, you will also have to set:
+To run it, you will also have to set:
 
 export LD_LIBRARY_PATH=/home/niceno/Development/AMGX/build:/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib:/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/cuda/12.3/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
 ------------------------------------------------------------------------------*/
@@ -31,21 +31,19 @@ int main() {
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
-  printf("I go a small step furhter and, in addition to copying the linear\n");
-  printf("system matrix to the device, I also copy the two vectors; the\n");
-  printf("right hand side and unknown vector, thus effectivelly copying\n");
-  printf("the entire linear system.\n");
+  printf("I go a small step furhter and, in addition to copying vectors\n");
+  printf("to the device, I actually set some values to them.\n");
   printf("\nThe AMGX functions I am using are:\n");
   printf("- AMGX_initialize\n");
   printf("- AMGX_get_api_version\n");
   printf("- AMGX_config_create\n");
   printf("- AMGX_resources_create_simple\n");
   printf("- AMGX_matrix_create\n");
+  printf("- AMGX_vector_create\n");
   printf("- AMGX_matrix_upload_all\n");
-  printf("- AMGX_vector_create           (new)\n");
-  printf("- AMGX_vector_upload           (new)\n");
+  printf("- AMGX_vector_upload\n");
   printf("- AMGX_matrix_destroy\n");
-  printf("- AMGX_vector_destroy          (new)\n");
+  printf("- AMGX_vector_destroy\n");
   printf("- AMGX_resources_destroy\n");
   printf("- AMGX_config_destroy\n");
   printf("- AMGX_finalize\n\n");
@@ -53,7 +51,7 @@ int main() {
   printf("- AMGX_config_handle\n");
   printf("- AMGX_resources_handle\n");
   printf("- AMGX_matrix_handle\n");
-  printf("- AMGX_vector_handle           (new)\n\n");
+  printf("- AMGX_vector_handle\n\n");
 
   /////////////////////////////
   //                         //
@@ -131,7 +129,7 @@ int main() {
         neigh[4] = OFF;  if(j < NY-1) neigh[4] = c + NX;
         neigh[5] = OFF;  if(k < NZ-1) neigh[5] = c + NX * NY;
 
-        // Initialize valud of diagonal entry
+        // Initialize value of diagonal entry
         double diag = 0.0;
 
         // Store the pointer to the beginning of a row.
@@ -161,15 +159,26 @@ int main() {
           }
         // Update the main diagonal
         a_val[a_dia[c]] = diag;
-
-  }
+      }
 
   // Final entry in a_row
   a_row[N] = pos;
 
+  // Fill the vector entries
+  for (int k = 0; k < NZ; k++)
+    for (int j = 0; j < NY; j++)
+      for (int i = 0; i < NX; i++) {
+        // Central index
+        int c = i + NX * (j + NY * k);
+        x[c] = 0.0;
+        b[c] = 0.0;
+        if(i == 0)    b[c] = -0.1;
+        if(i == NX-1) b[c] = +0.1;
+      }
+
   ///////////////////////////////////////
   //                                   //
-  //   Copy matrix to AMGX workspace   //
+  //   Copy system to AMGX workspace   //
   //                                   //
   ///////////////////////////////////////
   AMGX_resources_handle rsrc  = nullptr;
@@ -188,7 +197,7 @@ int main() {
   check_amgx(AMGX_resources_create_simple(&rsrc, cfg),
              "AMGX_resources_create_simple");
 
-  // Create device/double/double/int matrix
+  // Create matrix and vectors on device
   const AMGX_Mode mode = AMGX_mode_dDDI;
   check_amgx(AMGX_matrix_create(&A_dev, rsrc, mode),
              "AMGX_matrix_create");
