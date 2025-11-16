@@ -30,6 +30,7 @@ $LD_LIBRARY_PATH
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
+#include <cmath>
 #include <amgx_c.h>
 #include <cuda_runtime.h>
 
@@ -44,19 +45,20 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 }
 
 /*============================================================================*/
-extern "C" int call_amgx_(const int & NX,
-                          const int & NY,
-                          const int & NZ,
-                          const int & N,
-                          const int & nnz,
-                          const int a_row_host_fortran[],    // size: N+1
-                          const int a_col_host_fortran[],    // size: nnz
-                          const int a_dia_host_fortran[]) {  // size: N
+extern "C" int call_amgx_(const int    & NX,
+                          const int    & NY,
+                          const int    & NZ,
+                          const int    & N,
+                          const int    & nnz,
+                          const int    a_row_host_fortran[],    // size: N+1
+                          const int    a_col_host_fortran[],    // size: nnz
+                          const int    a_dia_host_fortran[],    // size: N
+                          const double a_val_host_fortran[]) {  // size: nnz
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
   printf("The main function, which is now in Fortran, forms the system\n");
-  printf("matrix and passes its integer arrays to C++ for checking.\n");
+  printf("matrix and passes it to C++ for solving it.\n");
   printf("\nThe AMGX functions I am using are:\n");
   printf("- AMGX_initialize\n");
   printf("- AMGX_get_api_version\n");
@@ -102,19 +104,13 @@ extern "C" int call_amgx_(const int & NX,
 
   printf("AMGX API version: %d.%d\n", api_major, api_minor);
 
-  ///////////////////////////////////////////////////////
-  //                                                   //
-  //   Create linear system of equations on the host   //
-  //                                                   //
-  ///////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////
+  //                                                     //
+  //   Create linear system of equations on the device   //
+  //                                                     //
+  /////////////////////////////////////////////////////////
 
   // Create matrix and two vectors
-  const int OFF = -1;
-  int neigh[6];
-  int    * a_row_host;
-  int    * a_col_host;
-  int    * a_dia_host;
-  double * a_val_host;
   int    * a_row;
   int    * a_col;
   int    * a_dia;
@@ -122,11 +118,7 @@ extern "C" int call_amgx_(const int & NX,
   double * x;
   double * b;
 
-  // Allocate memory
-  a_row_host = new int   [N+1];
-  a_col_host = new int   [nnz];
-  a_dia_host = new int   [N];
-  a_val_host = new double[nnz];
+  // Allocate memory on the device
   cudaMalloc(&a_row, (N+1) * sizeof(int));
   cudaMalloc(&a_col,  nnz  * sizeof(int));
   cudaMalloc(&a_dia,  N    * sizeof(int));
@@ -134,81 +126,25 @@ extern "C" int call_amgx_(const int & NX,
   cudaMalloc(&x,      N    * sizeof(double));
   cudaMalloc(&b,      N    * sizeof(double));
 
-  // Fill the matrix entries
-  int pos = 0;
-  for(int c = 0; c < N; c++) {
-
-    int k = c / (NX * NY);
-    int r = c % (NX * NY);
-    int j = r / NX;
-    int i = r % NX;
-
-    // Work out neighbours from smallest to biggest
-    neigh[0] = OFF;  if(k > 0)    neigh[0] = c - NX * NY;
-    neigh[1] = OFF;  if(j > 0)    neigh[1] = c - NX;
-    neigh[2] = OFF;  if(i > 0)    neigh[2] = c - 1;
-    neigh[3] = OFF;  if(i < NX-1) neigh[3] = c + 1;
-    neigh[4] = OFF;  if(j < NY-1) neigh[4] = c + NX;
-    neigh[5] = OFF;  if(k < NZ-1) neigh[5] = c + NX * NY;
-
-    // Initialize value of diagonal entry
-    double diag = 0.0;
-
-    // Store the pointer to the beginning of a row.
-    // (First time it reaches this line, c == 0 and
-    // pos == 0 meaning initialization will be fine)
-    a_row_host[c] = pos;
-
-    // Browse through neighbours smaller than c
-    for(int n = 0; n <= 2; n++)
-      if(neigh[n] != OFF) {
-        a_col_host[pos] = neigh[n];
-        a_val_host[pos] = -1.0;
-        diag += 1.0;
-        pos = pos + 1;
-      }
-
-    // Central position
-    a_col_host[pos] = c;
-    a_dia_host[c]   = pos;
-    pos             = pos + 1;
-
-    // Browse through neighbours larger than c
-    for(int n = 3; n <= 5; n++)
-      if(neigh[n] != OFF) {
-        a_col_host[pos] = neigh[n];
-        a_val_host[pos] = -1.0;
-        diag += 1.0;
-        pos = pos + 1;
-      }
-
-    // Update the main diagonal
-    a_val_host[a_dia_host[c]] = diag;
-  }
-
-  // Final entry in a_row
-  a_row_host[N] = pos;
-
-  ///////////////////////////////////////////////////
-  //
-  // Super simple checks for passed Fortran arrays
-  //
-  ///////////////////////////////////////////////////
-  for(int c = 0; c <= N; c++) {
-    assert(a_row_host[c] - a_row_host_fortran[c] == -1);
-  }
-  for(int i = 0; i < nnz; i++) {
-    assert(a_col_host[i] - a_col_host_fortran[i] == -1);
-  }
-  for(int c = 0; c < N; c++) {
-    assert(a_dia_host[c] - a_dia_host_fortran[c] == -1);
-  }
-
   // Copy the entire matrix to the device
-  cudaMemcpy(a_row, a_row_host, (N+1) * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_col, a_col_host,  nnz  * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_dia, a_dia_host,  N    * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_val, a_val_host,  nnz  * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(a_row, a_row_host_fortran, (N+1) * sizeof(int),    cudaMemcpyHostToDevice);
+  cudaMemcpy(a_col, a_col_host_fortran,  nnz  * sizeof(int),    cudaMemcpyHostToDevice);
+  cudaMemcpy(a_dia, a_dia_host_fortran,  N    * sizeof(int),    cudaMemcpyHostToDevice);
+  cudaMemcpy(a_val, a_val_host_fortran,  nnz  * sizeof(double), cudaMemcpyHostToDevice);
+
+  // Correct the indices of integer-based matrix pointers
+  #pragma acc parallel loop deviceptr(a_row)
+  for(int c = 0; c <= N; c++) {
+    a_row[c]--;
+  }
+  #pragma acc parallel loop deviceptr(a_col)
+  for(int i = 0; i < nnz; i++) {
+    a_col[i]--;
+  }
+  #pragma acc parallel loop deviceptr(a_dia)
+  for(int c = 0; c < N; c++) {
+    a_dia[c]--;
+  }
 
   // Fill the vector x
   #pragma acc parallel loop deviceptr(x)
@@ -317,10 +253,6 @@ extern "C" int call_amgx_(const int & NX,
   delete [] x_sol;
 
   // Free the memory
-  delete [] a_row_host;
-  delete [] a_col_host;
-  delete [] a_dia_host;
-  delete [] a_val_host;
   cudaFree(a_row);
   cudaFree(a_col);
   cudaFree(a_dia);

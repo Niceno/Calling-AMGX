@@ -93,6 +93,6 @@
   a_row_host(N+1) = pos
 
   call call_amgx(NX, NY, NZ, N, nnz,  &
-                 a_row_host, a_col_host, a_dia_host)
+                 a_row_host, a_col_host, a_dia_host, a_val_host)
 
   end program
