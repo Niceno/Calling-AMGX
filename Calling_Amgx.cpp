@@ -35,30 +35,43 @@ $LD_LIBRARY_PATH
 #include <cuda_runtime.h>
 
 /*============================================================================*/
-static void check_amgx(AMGX_RC rc, const char *where) {
+extern "C" void cuda_alloc_double_(void ** ptr, const int * n) {
 /*----------------------------------------------------------------------------*/
 
-  if (rc != AMGX_RC_OK) {
+  cudaError_t err = cudaMalloc(ptr, (*n) * sizeof(double));
+  if(err != cudaSuccess) {
+    std::fprintf(stderr, "cudaMalloc failed: %s\n",
+                 cudaGetErrorString(err));
+  }
+}
+
+
+/*============================================================================*/
+static void check_amgx(AMGX_RC rc, const char * where) {
+/*----------------------------------------------------------------------------*/
+
+  if(rc != AMGX_RC_OK) {
     fprintf(stderr, "AMGX error in %s: rc = %d\n", where, rc);
     exit(EXIT_FAILURE);
   }
 }
 
 /*============================================================================*/
-extern "C" int call_amgx_(const int    & NX,
-                          const int    & NY,
-                          const int    & NZ,
-                          const int    & N,
+extern "C" int call_amgx_(const int    & N,
                           const int    & nnz,
-                          const int    a_row_host_fortran[],    // size: N+1
-                          const int    a_col_host_fortran[],    // size: nnz
-                          const int    a_dia_host_fortran[],    // size: N
-                          const double a_val_host_fortran[]) {  // size: nnz
+                          const int    a_row_host_fortran[],  // size: N+1
+                          const int    a_col_host_fortran[],  // size: nnz
+                          const int    a_dia_host_fortran[],  // size: N
+                          const double a_val_host_fortran[],  // size: nnz
+                          void **      x_dev_ptr,             // size: N
+                          void **      b_dev_ptr) {           // size: N
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
   printf("The main function, which is now in Fortran, forms the system\n");
-  printf("matrix and passes it to C++ for solving it.\n");
+  printf("matrix and passes it to C++ for solving it.  In addition, it\n");
+  printf("forms the unknown and right hand side vectors on Fortran side\n");
+  printf("directly on the device.\n");
   printf("\nThe AMGX functions I am using are:\n");
   printf("- AMGX_initialize\n");
   printf("- AMGX_get_api_version\n");
@@ -123,8 +136,8 @@ extern "C" int call_amgx_(const int    & NX,
   cudaMalloc(&a_col,  nnz  * sizeof(int));
   cudaMalloc(&a_dia,  N    * sizeof(int));
   cudaMalloc(&a_val,  nnz  * sizeof(double));
-  cudaMalloc(&x,      N    * sizeof(double));
-  cudaMalloc(&b,      N    * sizeof(double));
+  x = static_cast <double *> (* x_dev_ptr);
+  b = static_cast <double *> (* b_dev_ptr);
 
   // Copy the entire matrix to the device
   cudaMemcpy(a_row, a_row_host_fortran, (N+1) * sizeof(int),    cudaMemcpyHostToDevice);
@@ -144,25 +157,6 @@ extern "C" int call_amgx_(const int    & NX,
   #pragma acc parallel loop deviceptr(a_dia)
   for(int c = 0; c < N; c++) {
     a_dia[c]--;
-  }
-
-  // Fill the vector x
-  #pragma acc parallel loop deviceptr(x)
-  for(int c = 0; c < N; c++) {
-    x[c] = 0.0;
-  }
-
-  // Fill the vector b
-  #pragma acc parallel loop deviceptr(b)
-  for (int c = 0; c < N; ++c) {
-    int r = c % (NX * NY);
-    int i = r % NX;
-
-    double val = 0.0;
-    if(i == 0)     val = -0.1;
-    if(i == NX-1)  val = +0.1;
-
-    b[c] = val;
   }
 
   ///////////////////////////////////////

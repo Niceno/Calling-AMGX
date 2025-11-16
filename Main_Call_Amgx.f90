@@ -18,10 +18,16 @@
   integer, allocatable :: a_col_host(:)
   integer, allocatable :: a_dia_host(:)
   real(8), allocatable :: a_val_host(:)
-  real(8)              :: diag
+  real(8)              :: diag, val
   integer              :: neigh(6)
   integer              :: i, j, k, r, c, i_cel, nnz, pos
+  type(c_ptr)          :: x_c_dev_ptr,    b_c_dev_ptr
+  real(8), pointer     :: x_f_dev_ptr(:), b_f_dev_ptr(:)
 !==============================================================================!
+
+  !-----------------------------------------!
+  !   Memory allocation (host and device)   !
+  !-----------------------------------------!
 
   ! Count non-zero entries
   nnz = N + 2 * (  (NX - 1) * NY * NZ     &
@@ -29,12 +35,25 @@
                  + NX * NY * (NZ - 1)  )
 
   ! Allocate memory for host arrays
-  allocate(a_row_host(N+1));
-  allocate(a_col_host(nnz));
-  allocate(a_dia_host(N));
-  allocate(a_val_host(nnz));
+  allocate(a_row_host(N+1))
+  allocate(a_col_host(nnz))
+  allocate(a_dia_host(N))
+  allocate(a_val_host(nnz))
 
-  ! Fill the matrix entries
+  ! Allocate x and b on device's side with C pointers
+  call cuda_alloc_double(x_c_dev_ptr, N)
+  call cuda_alloc_double(b_c_dev_ptr, N)
+
+  ! Transform those C pointers on the device to
+  ! Fortran-type pointers, still on the device
+  call c_f_pointer(x_c_dev_ptr, x_f_dev_ptr, [N])
+  call c_f_pointer(b_c_dev_ptr, b_f_dev_ptr, [N])
+
+  !----------------------------------------------------------!
+  !   Form the system matrix  (Done on the host because it   !
+  !    leads to race conditions on the device and I don't    !
+  !     feel like resolving it for this demo application)    !
+  !----------------------------------------------------------!
   pos = 1
   do c = 1, N
 
@@ -92,7 +111,33 @@
   ! Final entry in a_row
   a_row_host(N+1) = pos
 
-  call call_amgx(NX, NY, NZ, N, nnz,  &
-                 a_row_host, a_col_host, a_dia_host, a_val_host)
+  !----------------------------------------------------------------------!
+  !   Fill the unknown and the right-hand side vectors (on the device)   !
+  !----------------------------------------------------------------------!
+
+  !$acc parallel loop deviceptr(x_f_dev_ptr)
+  do c = 1, N
+    x_f_dev_ptr(c) = 0.0
+  end do
+
+  ! Fill the vector b
+  !$acc parallel loop deviceptr(b_f_dev_ptr)
+  do c = 1, N
+    r = mod(c-1, NX * NY)
+    i = mod(r, NX) + 1
+
+    val = 0.0
+    if(i .eq. 1)   val = -0.1
+    if(i .eq. NX)  val = +0.1
+
+    b_f_dev_ptr(c) = val
+  end do
+
+  !--------------------------!
+  !   Call the AMGX solver   !
+  !--------------------------!
+  call call_amgx(N, nnz,                                          &
+                 a_row_host, a_col_host, a_dia_host, a_val_host,  &
+                 x_c_dev_ptr, b_c_dev_ptr)
 
   end program
