@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
    I compiled this file with:
 
-nvc++ Step_008.cpp -o Step_008 -acc                                               \
+nvc++ Calling_Amgx.cpp -o Calling_Amgx -acc                                               \
 -I/home/niceno/Development/AMGX/include                                           \
 -L/home/niceno/Development/AMGX/build -lamgxsh                                    \
 -L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/cuda/12.3/targets/x86_64-linux/lib        \
@@ -25,8 +25,8 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 /*----------------------------------------------------------------------------*/
 
   if (rc != AMGX_RC_OK) {
-    std::fprintf(stderr, "AMGX error in %s: rc = %d\n", where, rc);
-    std::exit(EXIT_FAILURE);
+    fprintf(stderr, "AMGX error in %s: rc = %d\n", where, rc);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -34,37 +34,37 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 int main() {
 /*----------------------------------------------------------------------------*/
 
-  std::printf("Hello from Step_008!\n");
-  std::printf("I go an important small step furhter from Step_006 and in\n");
-  std::printf("addition to copying the system (matrix and vectors) to the\n");
-  std::printf("device, I also solve them.\n");
-  std::printf("\nThe AMGX functions I am using are:\n");
-  std::printf("- AMGX_initialize\n");
-  std::printf("- AMGX_get_api_version\n");
-  std::printf("- AMGX_config_create\n");
-  std::printf("- AMGX_resources_create_simple\n");
-  std::printf("- AMGX_matrix_create\n");
-  std::printf("- AMGX_vector_create\n");
-  std::printf("- AMGX_matrix_upload_all\n");
-  std::printf("- AMGX_vector_upload\n");
-  std::printf("- AMGX_solver_create                (new)\n");
-  std::printf("- AMGX_solver_setup                 (new)\n");
-  std::printf("- AMGX_solver_solve                 (new)\n");
-  std::printf("- AMGX_solver_get_status            (new)\n");
-  std::printf("- AMGX_solver_get_iterations_number (new)\n");
-  std::printf("- AMGX_vector_download              (new)\n");
-  std::printf("- AMGX_solver_destroy               (new)\n");
-  std::printf("- AMGX_matrix_destroy\n");
-  std::printf("- AMGX_vector_destroy\n");
-  std::printf("- AMGX_resources_destroy\n");
-  std::printf("- AMGX_config_destroy\n");
-  std::printf("- AMGX_finalize\n\n");
-  std::printf("and these AMGX's data types:\n");
-  std::printf("- AMGX_config_handle\n");
-  std::printf("- AMGX_resources_handle\n");
-  std::printf("- AMGX_matrix_handle\n");
-  std::printf("- AMGX_vector_handle\n");
-  std::printf("- AMGX_solver_handle               (new)\n\n");
+  printf("Hello from Calling_Amgx!\n");
+  printf("I go an important small step furhter from Step_006 and in\n");
+  printf("addition to copying the system (matrix and vectors) to the\n");
+  printf("device, I also solve them.\n");
+  printf("\nThe AMGX functions I am using are:\n");
+  printf("- AMGX_initialize\n");
+  printf("- AMGX_get_api_version\n");
+  printf("- AMGX_config_create\n");
+  printf("- AMGX_resources_create_simple\n");
+  printf("- AMGX_matrix_create\n");
+  printf("- AMGX_vector_create\n");
+  printf("- AMGX_matrix_upload_all\n");
+  printf("- AMGX_vector_upload\n");
+  printf("- AMGX_solver_create                (new)\n");
+  printf("- AMGX_solver_setup                 (new)\n");
+  printf("- AMGX_solver_solve                 (new)\n");
+  printf("- AMGX_solver_get_status            (new)\n");
+  printf("- AMGX_solver_get_iterations_number (new)\n");
+  printf("- AMGX_vector_download              (new)\n");
+  printf("- AMGX_solver_destroy               (new)\n");
+  printf("- AMGX_matrix_destroy\n");
+  printf("- AMGX_vector_destroy\n");
+  printf("- AMGX_resources_destroy\n");
+  printf("- AMGX_config_destroy\n");
+  printf("- AMGX_finalize\n\n");
+  printf("and these AMGX's data types:\n");
+  printf("- AMGX_config_handle\n");
+  printf("- AMGX_resources_handle\n");
+  printf("- AMGX_matrix_handle\n");
+  printf("- AMGX_vector_handle\n");
+  printf("- AMGX_solver_handle               (new)\n\n");
 
   /////////////////////////////
   //                         //
@@ -81,7 +81,7 @@ int main() {
   check_amgx(AMGX_get_api_version(&api_major, &api_minor),
              "AMGX_get_api_version");
 
-  std::printf("AMGX API version: %d.%d\n", api_major, api_minor);
+  printf("AMGX API version: %d.%d\n", api_major, api_minor);
 
   ///////////////////////////////////////////////////////
   //                                                   //
@@ -253,12 +253,12 @@ int main() {
                A_dev, N, cnt, 1, 1, a_row, a_col, a_val, nullptr),
                "AMGX_matrix_upload_all");
 
-  std::printf("Matrix uploaded to AMGX.\n");
+  printf("Matrix uploaded to AMGX.\n");
 
   // Upload host vectors to device
   check_amgx(AMGX_vector_upload(x_dev, N, 1, x), "AMGX_vector_upload(x)");
   check_amgx(AMGX_vector_upload(b_dev, N, 1, b), "AMGX_vector_upload(b)");
-  std::printf("Vectors x and b uploaded to AMGX.\n");
+  printf("Vectors x and b uploaded to AMGX.\n");
 
   ///////////////////////////////////
   //                               //
@@ -272,21 +272,21 @@ int main() {
 
   AMGX_SOLVE_STATUS status;
   check_amgx(AMGX_solver_get_status(slv, &status), "AMGX_solver_get_status");
-  std::printf("Solve status: %d (0=SUCCESS)\n", status);
+  printf("Solve status: %d (0=SUCCESS)\n", status);
 
   int iters = 0;
   check_amgx(AMGX_solver_get_iterations_number(slv, &iters),
              "AMGX_solver_get_iterations_number");
-  std::printf("Number of iterations: %d\n", iters);
+  printf("Number of iterations: %d\n", iters);
 
   // Download solution back to host
   double * x_sol = new double[N];
   check_amgx(AMGX_vector_download(x_dev, x_sol),
              "AMGX_vector_download");
 
-  std::printf("First 10 solution entries:\n");
+  printf("First 10 solution entries:\n");
   for (int i = 0; i < 10 && i < N; i++) {
-    std::printf("  x[%d] = %e\n", i, x_sol[i]);
+    printf("  x[%d] = %e\n", i, x_sol[i]);
   }
 
   delete [] x_sol;
@@ -320,7 +320,7 @@ int main() {
   // Finalize
   check_amgx(AMGX_finalize(), "AMGX_finalize");
 
-  std::printf("\nGoodbye from Step_008.\n");
+  printf("\nGoodbye from Calling_Amgx.\n");
 
   return 0;
 }
