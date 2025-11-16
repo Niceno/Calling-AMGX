@@ -31,13 +31,30 @@ int main() {
 /*----------------------------------------------------------------------------*/
 
   std::printf("Hello from Calling_Amgx!\n\n");
-  std::printf("I go a step furhter from previously.  I am compiled with the\n");
-  std::printf("same libraries as before, but I form a system matrix and\n");
-  std::printf("right hand side and unknow vectors on the host.\n");
-  std::printf("\nThe AMGX functions I am using are still the same:\n");
+  std::printf("I go a step furhter and in addition to forming the linear\n");
+  std::printf("system of equations on the host, I also copy them to the\n");
+  std::printf("AMGX's worskpace on the device.\n");
+  std::printf("\nThe AMGX functions I am using are:\n");
   std::printf("- AMGX_initialize\n");
   std::printf("- AMGX_get_api_version\n");
+  std::printf("- AMGX_config_create           (new)\n");
+  std::printf("- AMGX_resources_create_simple (new)\n");
+  std::printf("- AMGX_matrix_create           (new)\n");
+  std::printf("- AMGX_matrix_upload_all       (new)\n");
+  std::printf("- AMGX_matrix_destroy          (new)\n");
+  std::printf("- AMGX_resources_destroy       (new)\n");
+  std::printf("- AMGX_config_destroy          (new)\n");
   std::printf("- AMGX_finalize\n\n");
+  std::printf("and these AMGX's data types:\n");
+  std::printf("- AMGX_config_handle           (new)\n");
+  std::printf("- AMGX_resources_handle        (new)\n");
+  std::printf("- AMGX_matrix_handle           (new)\n\n");
+
+  /////////////////////////////
+  //                         //
+  //   AMGX Initialization   //
+  //                         //
+  /////////////////////////////
 
   // Initialize AMGX core
   check_amgx(AMGX_initialize(), "AMGX_initialize");
@@ -49,6 +66,12 @@ int main() {
              "AMGX_get_api_version");
 
   std::printf("AMGX API version: %d.%d\n", api_major, api_minor);
+
+  ///////////////////////////////////////////////////////
+  //                                                   //
+  //   Create linear system of equations on the host   //
+  //                                                   //
+  ///////////////////////////////////////////////////////
 
   // Create matrix and two vectors
   const int NX  = 10;
@@ -139,6 +162,36 @@ int main() {
   // Final entry in a_row
   a_row[N] = pos;
 
+  ///////////////////////////////////////
+  //                                   //
+  //   Copy matrix to AMGX workspace   //
+  //                                   //
+  ///////////////////////////////////////
+  AMGX_resources_handle rsrc  = nullptr;
+  AMGX_config_handle    cfg   = nullptr;
+  AMGX_matrix_handle    A_dev = nullptr;
+
+  // Minimal config: just specify config_version.
+  // (You can later move solver options into a file or a longer string.)
+  check_amgx(AMGX_config_create(&cfg, "config_version=2"),
+    "AMGX_config_create");
+
+  // Simple resources: single GPU, device 0
+  check_amgx(AMGX_resources_create_simple(&rsrc, cfg),
+             "AMGX_resources_create_simple");
+
+  // Create device/double/double/int matrix
+  const AMGX_Mode mode = AMGX_mode_dDDI;
+  check_amgx(AMGX_matrix_create(&A_dev, rsrc, mode),
+             "AMGX_matrix_create");
+
+  // Upload CSR matrix to AMGX (device)
+  check_amgx(AMGX_matrix_upload_all(
+               A_dev, N, cnt, 1, 1, a_row, a_col, a_val, nullptr),
+               "AMGX_matrix_upload_all");
+
+  std::printf("Matrix uploaded to AMGX.\n");
+
   // Free the memory
   delete [] a_row;
   delete [] a_col;
@@ -146,6 +199,17 @@ int main() {
   delete [] a_val;
   delete [] x;
   delete [] b;
+
+  ///////////////////////////
+  //                       //
+  //   AMGX Finalization   //
+  //                       //
+  ///////////////////////////
+
+  // Destroy AMGX objects
+  check_amgx(AMGX_matrix_destroy(A_dev),   "AMGX_matrix_destroy");
+  check_amgx(AMGX_resources_destroy(rsrc), "AMGX_resources_destroy");
+  check_amgx(AMGX_config_destroy(cfg),     "AMGX_config_destroy");
 
   // Finalize
   check_amgx(AMGX_finalize(), "AMGX_finalize");
