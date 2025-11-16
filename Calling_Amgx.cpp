@@ -35,16 +35,66 @@ $LD_LIBRARY_PATH
 #include <cuda_runtime.h>
 
 /*============================================================================*/
-extern "C" void cuda_alloc_double_(void ** ptr, const int * n) {
+extern "C" void cuda_alloc_double_(void ** ptr, const int & N) {
 /*----------------------------------------------------------------------------*/
 
-  cudaError_t err = cudaMalloc(ptr, (*n) * sizeof(double));
+  cudaError_t err = cudaMalloc(ptr, N * sizeof(double));
   if(err != cudaSuccess) {
     std::fprintf(stderr, "cudaMalloc failed: %s\n",
                  cudaGetErrorString(err));
   }
 }
 
+/*============================================================================*/
+extern "C" void cuda_alloc_double_copyin_(void **        ptr,
+                                          const double * val_host,
+                                          const int    & N) {
+/*----------------------------------------------------------------------------*/
+
+  cudaError_t err = cudaMalloc(ptr, N * sizeof(double));
+  if (err != cudaSuccess) {
+    std::fprintf(stderr, "cudaMalloc (double) failed: %s\n",
+                 cudaGetErrorString(err));
+    return;
+  }
+
+  err = cudaMemcpy(*ptr, val_host, N * sizeof(double), cudaMemcpyHostToDevice);
+  if (err != cudaSuccess) {
+    std::fprintf(stderr, "cudaMemcpy H->D (double) failed: %s\n",
+                 cudaGetErrorString(err));
+  }
+}
+
+/*============================================================================*/
+extern "C" void cuda_alloc_int_(void ** ptr, const int & N) {
+/*----------------------------------------------------------------------------*/
+
+  cudaError_t err = cudaMalloc(ptr, N * sizeof(int));
+  if(err != cudaSuccess) {
+    std::fprintf(stderr, "cudaMalloc failed: %s\n",
+                 cudaGetErrorString(err));
+  }
+}
+
+/*============================================================================*/
+extern "C" void cuda_alloc_int_copyin_(void **     ptr,
+                                       const int * val_host,
+                                       const int & N) {
+/*----------------------------------------------------------------------------*/
+
+  cudaError_t err = cudaMalloc(ptr, N * sizeof(int));
+  if (err != cudaSuccess) {
+    std::fprintf(stderr, "cudaMalloc (int) failed: %s\n",
+                 cudaGetErrorString(err));
+    return;
+  }
+
+  err = cudaMemcpy(*ptr, val_host, N * sizeof(int), cudaMemcpyHostToDevice);
+  if (err != cudaSuccess) {
+    std::fprintf(stderr, "cudaMemcpy H->D (int) failed: %s\n",
+                 cudaGetErrorString(err));
+  }
+}
 
 /*============================================================================*/
 static void check_amgx(AMGX_RC rc, const char * where) {
@@ -59,19 +109,16 @@ static void check_amgx(AMGX_RC rc, const char * where) {
 /*============================================================================*/
 extern "C" int call_amgx_(const int    & N,
                           const int    & nnz,
-                          const int    a_row_host_fortran[],  // size: N+1
-                          const int    a_col_host_fortran[],  // size: nnz
-                          const int    a_dia_host_fortran[],  // size: N
-                          const double a_val_host_fortran[],  // size: nnz
+                          void **      a_row_dev_ptr,         // size: N+1
+                          void **      a_col_dev_ptr,         // size: nnz
+                          void **      a_val_dev_ptr,         // size: nnz
                           void **      x_dev_ptr,             // size: N
                           void **      b_dev_ptr) {           // size: N
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
-  printf("The main function, which is now in Fortran, forms the system\n");
-  printf("matrix and passes it to C++ for solving it.  In addition, it\n");
-  printf("forms the unknown and right hand side vectors on Fortran side\n");
-  printf("directly on the device.\n");
+  printf("Everything works as it supposed to.  Fortan side has everything\n");
+  printf("on the device and passes it all to C++ for solving it.\n");
   printf("\nThe AMGX functions I am using are:\n");
   printf("- AMGX_initialize\n");
   printf("- AMGX_get_api_version\n");
@@ -117,33 +164,18 @@ extern "C" int call_amgx_(const int    & N,
 
   printf("AMGX API version: %d.%d\n", api_major, api_minor);
 
-  /////////////////////////////////////////////////////////
-  //                                                     //
-  //   Create linear system of equations on the device   //
-  //                                                     //
-  /////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////
+  //                                                                     //
+  //   Connect to the linear system of equations from the Fortran side   //
+  //                                                                     //
+  /////////////////////////////////////////////////////////////////////////
 
-  // Create matrix and two vectors
-  int    * a_row;
-  int    * a_col;
-  int    * a_dia;
-  double * a_val;
-  double * x;
-  double * b;
-
-  // Allocate memory on the device
-  cudaMalloc(&a_row, (N+1) * sizeof(int));
-  cudaMalloc(&a_col,  nnz  * sizeof(int));
-  cudaMalloc(&a_dia,  N    * sizeof(int));
-  cudaMalloc(&a_val,  nnz  * sizeof(double));
-  x = static_cast <double *> (* x_dev_ptr);
-  b = static_cast <double *> (* b_dev_ptr);
-
-  // Copy the entire matrix to the device
-  cudaMemcpy(a_row, a_row_host_fortran, (N+1) * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_col, a_col_host_fortran,  nnz  * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_dia, a_dia_host_fortran,  N    * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_val, a_val_host_fortran,  nnz  * sizeof(double), cudaMemcpyHostToDevice);
+  // Connect the local poitners to what you have received from the Fortran side
+  int    * a_row = static_cast <int *>    (* a_row_dev_ptr);
+  int    * a_col = static_cast <int *>    (* a_col_dev_ptr);
+  double * a_val = static_cast <double *> (* a_val_dev_ptr);
+  double * x     = static_cast <double *> (* x_dev_ptr);
+  double * b     = static_cast <double *> (* b_dev_ptr);
 
   // Correct the indices of integer-based matrix pointers
   #pragma acc parallel loop deviceptr(a_row)
@@ -153,10 +185,6 @@ extern "C" int call_amgx_(const int    & N,
   #pragma acc parallel loop deviceptr(a_col)
   for(int i = 0; i < nnz; i++) {
     a_col[i]--;
-  }
-  #pragma acc parallel loop deviceptr(a_dia)
-  for(int c = 0; c < N; c++) {
-    a_dia[c]--;
   }
 
   ///////////////////////////////////////
@@ -249,7 +277,6 @@ extern "C" int call_amgx_(const int    & N,
   // Free the memory
   cudaFree(a_row);
   cudaFree(a_col);
-  cudaFree(a_dia);
   cudaFree(a_val);
   cudaFree(x);
   cudaFree(b);

@@ -16,13 +16,15 @@
 !-----------------------------------[Locals]-----------------------------------!
   integer, allocatable :: a_row_host(:)
   integer, allocatable :: a_col_host(:)
-  integer, allocatable :: a_dia_host(:)
   real(8), allocatable :: a_val_host(:)
   real(8)              :: diag, val
   integer              :: neigh(6)
-  integer              :: i, j, k, r, c, i_cel, nnz, pos
-  type(c_ptr)          :: x_c_dev_ptr,    b_c_dev_ptr
-  real(8), pointer     :: x_f_dev_ptr(:), b_f_dev_ptr(:)
+  integer              :: i, j, k, r, c, i_cel, nnz, pos, a_dia
+  type(c_ptr)          :: a_row_c_dev_ptr
+  type(c_ptr)          :: a_col_c_dev_ptr
+  type(c_ptr)          :: a_val_c_dev_ptr
+  type(c_ptr)          :: x_c_dev_ptr,        b_c_dev_ptr
+  real(8), pointer     :: x_f_dev_ptr(:),     b_f_dev_ptr(:)
 !==============================================================================!
 
   !-----------------------------------------!
@@ -37,17 +39,16 @@
   ! Allocate memory for host arrays
   allocate(a_row_host(N+1))
   allocate(a_col_host(nnz))
-  allocate(a_dia_host(N))
   allocate(a_val_host(nnz))
 
-  ! Allocate x and b on device's side with C pointers
+  ! Allocate a_val, x and b on device's side with C pointers
   call cuda_alloc_double(x_c_dev_ptr, N)
   call cuda_alloc_double(b_c_dev_ptr, N)
 
   ! Transform those C pointers on the device to
   ! Fortran-type pointers, still on the device
-  call c_f_pointer(x_c_dev_ptr, x_f_dev_ptr, [N])
-  call c_f_pointer(b_c_dev_ptr, b_f_dev_ptr, [N])
+  call c_f_pointer(x_c_dev_ptr,     x_f_dev_ptr,     [N])
+  call c_f_pointer(b_c_dev_ptr,     b_f_dev_ptr,     [N])
 
   !----------------------------------------------------------!
   !   Form the system matrix  (Done on the host because it   !
@@ -90,7 +91,7 @@
 
     ! Central position
     a_col_host(pos) = c
-    a_dia_host(c)   = pos
+    a_dia           = pos
     pos             = pos + 1
 
     ! Browse through neighbours larger than c
@@ -104,12 +105,17 @@
     end do
 
     ! Update the main diagonal
-    a_val_host(a_dia_host(c)) = diag
+    a_val_host(a_dia) = diag
 
   end do
 
   ! Final entry in a_row
   a_row_host(N+1) = pos
+
+  ! Allocate memory for a_val on the device and update fortran pointer
+  call cuda_alloc_int_copyin   (a_row_c_dev_ptr, a_row_host, N+1)
+  call cuda_alloc_int_copyin   (a_col_c_dev_ptr, a_col_host, nnz)
+  call cuda_alloc_double_copyin(a_val_c_dev_ptr, a_val_host, nnz)
 
   !----------------------------------------------------------------------!
   !   Fill the unknown and the right-hand side vectors (on the device)   !
@@ -136,8 +142,11 @@
   !--------------------------!
   !   Call the AMGX solver   !
   !--------------------------!
-  call call_amgx(N, nnz,                                          &
-                 a_row_host, a_col_host, a_dia_host, a_val_host,  &
-                 x_c_dev_ptr, b_c_dev_ptr)
+  call call_amgx(N, nnz,           &
+                 a_row_c_dev_ptr,  &
+                 a_col_c_dev_ptr,  &
+                 a_val_c_dev_ptr,  &
+                 x_c_dev_ptr,      &
+                 b_c_dev_ptr)
 
   end program
