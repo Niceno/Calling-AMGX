@@ -1,14 +1,22 @@
 /*------------------------------------------------------------------------------
-   I compiled this file with:
 
-nvc++ Calling_Amgx.cpp -o Calling_Amgx -acc                                       \
+* This has to be compiled in two stages.  This file is compiled first with:
+
+nvc++ -c Calling_Amgx.cpp -o call_amgx.o -acc  \
+-I/home/niceno/Development/AMGX/include
+
+to create a library called call_amgx.o
+
+* After that, Fortran source is compiled and linked with that library with:
+
+nvfortran Main_Call_Amgx.f90 -o Process call_amgx.o -acc -c++libs                 \
 -I/home/niceno/Development/AMGX/include                                           \
--L/home/niceno/Development/AMGX/build -lamgxsh                                    \
+-L/home/niceno/Development/AMGX/build                                             \
 -L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/cuda/12.3/targets/x86_64-linux/lib        \
--L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib/  \
--lcublas -lcusparse -lcusolver -lnvJitLink -lcudart
+-L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib   \
+-lcublas -lcusparse -lcusolver -lnvJitLink -lcudart -lamgxsh
 
-To run it, you will also have to set:
+* To run it, you will also have to set:
 
 export LD_LIBRARY_PATH=/home/niceno/Development/AMGX/build:                       \
 /opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib:    \
@@ -31,7 +39,7 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 }
 
 /*============================================================================*/
-int main() {
+extern "C" int call_amgx_() {
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
