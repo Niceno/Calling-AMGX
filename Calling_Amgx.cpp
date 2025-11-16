@@ -39,7 +39,9 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 }
 
 /*============================================================================*/
-extern "C" int call_amgx_() {
+extern "C" int call_amgx_(const int & NX,
+                          const int & NY,
+                          const int & NZ) {
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
@@ -98,9 +100,6 @@ extern "C" int call_amgx_() {
   ///////////////////////////////////////////////////////
 
   // Create matrix and two vectors
-  const int NX  = 100;
-  const int NY  = 100;
-  const int NZ  = 100;
   const int N   = NX * NY * NZ;
   const int OFF = -1;
   int neigh[6];
