@@ -21,8 +21,8 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 /*----------------------------------------------------------------------------*/
 
   if (rc != AMGX_RC_OK) {
-    std::fprintf(stderr, "AMGX error in %s: rc = %d\n", where, rc);
-    std::exit(EXIT_FAILURE);
+    fprintf(stderr, "AMGX error in %s: rc = %d\n", where, rc);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -30,25 +30,25 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 int main() {
 /*----------------------------------------------------------------------------*/
 
-  std::printf("Hello from Calling_Amgx!\n\n");
-  std::printf("I go a step furhter and in addition to forming the linear\n");
-  std::printf("system of equations on the host, I also copy them to the\n");
-  std::printf("AMGX's worskpace on the device.\n");
-  std::printf("\nThe AMGX functions I am using are:\n");
-  std::printf("- AMGX_initialize\n");
-  std::printf("- AMGX_get_api_version\n");
-  std::printf("- AMGX_config_create           (new)\n");
-  std::printf("- AMGX_resources_create_simple (new)\n");
-  std::printf("- AMGX_matrix_create           (new)\n");
-  std::printf("- AMGX_matrix_upload_all       (new)\n");
-  std::printf("- AMGX_matrix_destroy          (new)\n");
-  std::printf("- AMGX_resources_destroy       (new)\n");
-  std::printf("- AMGX_config_destroy          (new)\n");
-  std::printf("- AMGX_finalize\n\n");
-  std::printf("and these AMGX's data types:\n");
-  std::printf("- AMGX_config_handle           (new)\n");
-  std::printf("- AMGX_resources_handle        (new)\n");
-  std::printf("- AMGX_matrix_handle           (new)\n\n");
+  printf("Hello from Calling_Amgx!\n\n");
+  printf("I go a step furhter and in addition to forming the linear\n");
+  printf("system of equations on the host, I also copy them to the\n");
+  printf("AMGX's worskpace on the device.\n");
+  printf("\nThe AMGX functions I am using are:\n");
+  printf("- AMGX_initialize\n");
+  printf("- AMGX_get_api_version\n");
+  printf("- AMGX_config_create           (new)\n");
+  printf("- AMGX_resources_create_simple (new)\n");
+  printf("- AMGX_matrix_create           (new)\n");
+  printf("- AMGX_matrix_upload_all       (new)\n");
+  printf("- AMGX_matrix_destroy          (new)\n");
+  printf("- AMGX_resources_destroy       (new)\n");
+  printf("- AMGX_config_destroy          (new)\n");
+  printf("- AMGX_finalize\n\n");
+  printf("and these AMGX's data types:\n");
+  printf("- AMGX_config_handle           (new)\n");
+  printf("- AMGX_resources_handle        (new)\n");
+  printf("- AMGX_matrix_handle           (new)\n\n");
 
   /////////////////////////////
   //                         //
@@ -65,7 +65,7 @@ int main() {
   check_amgx(AMGX_get_api_version(&api_major, &api_minor),
              "AMGX_get_api_version");
 
-  std::printf("AMGX API version: %d.%d\n", api_major, api_minor);
+  printf("AMGX API version: %d.%d\n", api_major, api_minor);
 
   ///////////////////////////////////////////////////////
   //                                                   //
@@ -190,7 +190,7 @@ int main() {
                A_dev, N, cnt, 1, 1, a_row, a_col, a_val, nullptr),
                "AMGX_matrix_upload_all");
 
-  std::printf("Matrix uploaded to AMGX.\n");
+  printf("Matrix uploaded to AMGX.\n");
 
   // Free the memory
   delete [] a_row;
@@ -214,7 +214,7 @@ int main() {
   // Finalize
   check_amgx(AMGX_finalize(), "AMGX_finalize");
 
-  std::printf("\nGoodbye from Calling_Amgx.\n");
+  printf("\nGoodbye from Calling_Amgx.\n");
 
   return 0;
 }
