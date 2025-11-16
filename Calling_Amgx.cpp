@@ -31,24 +31,29 @@ int main() {
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
-  printf("I go a step furhter and in addition to forming the linear\n");
-  printf("system of equations on the host, I also copy them to the\n");
-  printf("AMGX's worskpace on the device.\n");
+  printf("I go a small step furhter and, in addition to copying the linear\n");
+  printf("system matrix to the device, I also copy the two vectors; the\n");
+  printf("right hand side and unknown vector, thus effectivelly copying\n");
+  printf("the entire linear system.\n");
   printf("\nThe AMGX functions I am using are:\n");
   printf("- AMGX_initialize\n");
   printf("- AMGX_get_api_version\n");
-  printf("- AMGX_config_create           (new)\n");
-  printf("- AMGX_resources_create_simple (new)\n");
-  printf("- AMGX_matrix_create           (new)\n");
-  printf("- AMGX_matrix_upload_all       (new)\n");
-  printf("- AMGX_matrix_destroy          (new)\n");
-  printf("- AMGX_resources_destroy       (new)\n");
-  printf("- AMGX_config_destroy          (new)\n");
+  printf("- AMGX_config_create\n");
+  printf("- AMGX_resources_create_simple\n");
+  printf("- AMGX_matrix_create\n");
+  printf("- AMGX_matrix_upload_all\n");
+  printf("- AMGX_vector_create           (new)\n");
+  printf("- AMGX_vector_upload           (new)\n");
+  printf("- AMGX_matrix_destroy\n");
+  printf("- AMGX_vector_destroy          (new)\n");
+  printf("- AMGX_resources_destroy\n");
+  printf("- AMGX_config_destroy\n");
   printf("- AMGX_finalize\n\n");
   printf("and these AMGX's data types:\n");
-  printf("- AMGX_config_handle           (new)\n");
-  printf("- AMGX_resources_handle        (new)\n");
-  printf("- AMGX_matrix_handle           (new)\n\n");
+  printf("- AMGX_config_handle\n");
+  printf("- AMGX_resources_handle\n");
+  printf("- AMGX_matrix_handle\n");
+  printf("- AMGX_vector_handle           (new)\n\n");
 
   /////////////////////////////
   //                         //
@@ -170,6 +175,9 @@ int main() {
   AMGX_resources_handle rsrc  = nullptr;
   AMGX_config_handle    cfg   = nullptr;
   AMGX_matrix_handle    A_dev = nullptr;
+  AMGX_vector_handle    x_dev = nullptr;
+  AMGX_vector_handle    b_dev = nullptr;
+
 
   // Minimal config: just specify config_version.
   // (You can later move solver options into a file or a longer string.)
@@ -185,12 +193,23 @@ int main() {
   check_amgx(AMGX_matrix_create(&A_dev, rsrc, mode),
              "AMGX_matrix_create");
 
+  // Create device vectors (same mode as matrix)
+  check_amgx(AMGX_vector_create(&x_dev, rsrc, mode),
+             "AMGX_vector_create(x_dev)");
+  check_amgx(AMGX_vector_create(&b_dev, rsrc, mode),
+             "AMGX_vector_create(b_dev)");
+
   // Upload CSR matrix to AMGX (device)
   check_amgx(AMGX_matrix_upload_all(
                A_dev, N, cnt, 1, 1, a_row, a_col, a_val, nullptr),
                "AMGX_matrix_upload_all");
 
   printf("Matrix uploaded to AMGX.\n");
+
+  // Upload host vectors to device
+  check_amgx(AMGX_vector_upload(x_dev, N, 1, x), "AMGX_vector_upload(x_dev)");
+  check_amgx(AMGX_vector_upload(b_dev, N, 1, b), "AMGX_vector_upload(b_dev)");
+  printf("Vectors x and b uploaded to AMGX.\n");
 
   // Free the memory
   delete [] a_row;
@@ -208,6 +227,8 @@ int main() {
 
   // Destroy AMGX objects
   check_amgx(AMGX_matrix_destroy(A_dev),   "AMGX_matrix_destroy");
+  check_amgx(AMGX_vector_destroy(x_dev),   "AMGX_vector_destroy");
+  check_amgx(AMGX_vector_destroy(b_dev),   "AMGX_vector_destroy");
   check_amgx(AMGX_resources_destroy(rsrc), "AMGX_resources_destroy");
   check_amgx(AMGX_config_destroy(cfg),     "AMGX_config_destroy");
 
