@@ -16,6 +16,10 @@ nvfortran Main_Call_Amgx.f90 -o Process call_amgx.o -acc -c++libs               
 -L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib   \
 -lcublas -lcusparse -lcusolver -lnvJitLink -lcudart -lamgxsh
 
+* You might also want to compile them all together:
+
+nvc++ -c Calling_Amgx.cpp -o call_amgx.o -acc  -I/home/niceno/Development/AMGX/include;  nvfortran Main_Call_Amgx.f90 -o Process call_amgx.o -acc -c++libs -I/home/niceno/Development/AMGX/include -L/home/niceno/Development/AMGX/build -L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/cuda/12.3/targets/x86_64-linux/lib -L/opt/nvidia/hpc_sdk/Linux_x86_64/24.1/math_libs/12.3/targets/x86_64-linux/lib -lcublas -lcusparse -lcusolver -lnvJitLink -lcudart -lamgxsh
+
 * To run it, you will also have to set:
 
 export LD_LIBRARY_PATH=/home/niceno/Development/AMGX/build:                       \
@@ -25,6 +29,7 @@ $LD_LIBRARY_PATH
 ------------------------------------------------------------------------------*/
 #include <cstdio>
 #include <cstdlib>
+#include <cassert>
 #include <amgx_c.h>
 #include <cuda_runtime.h>
 
@@ -41,13 +46,17 @@ static void check_amgx(AMGX_RC rc, const char *where) {
 /*============================================================================*/
 extern "C" int call_amgx_(const int & NX,
                           const int & NY,
-                          const int & NZ) {
+                          const int & NZ,
+                          const int & N,
+                          const int & nnz,
+                          const int a_row_host_fortran[],    // size: N+1
+                          const int a_col_host_fortran[],    // size: nnz
+                          const int a_dia_host_fortran[]) {  // size: N
 /*----------------------------------------------------------------------------*/
 
   printf("Hello from Calling_Amgx!\n\n");
-  printf("I go another important step furhter from and instead of copying\n");
-  printf("linear system from the host to the device, I copy from device to\n");
-  printf("device, before solving them.\n");
+  printf("The main function, which is now in Fortran, forms the system\n");
+  printf("matrix and passes its integer arrays to C++ for checking.\n");
   printf("\nThe AMGX functions I am using are:\n");
   printf("- AMGX_initialize\n");
   printf("- AMGX_get_api_version\n");
@@ -100,7 +109,6 @@ extern "C" int call_amgx_(const int & NX,
   ///////////////////////////////////////////////////////
 
   // Create matrix and two vectors
-  const int N   = NX * NY * NZ;
   const int OFF = -1;
   int neigh[6];
   int    * a_row_host;
@@ -114,20 +122,15 @@ extern "C" int call_amgx_(const int & NX,
   double * x;
   double * b;
 
-  // Count non-zero entries
-  int cnt = N + 2 * (  (NX - 1) * NY * NZ
-                     + NX * (NY - 1) * NZ
-                     + NX * NY * (NZ - 1)  );
-
   // Allocate memory
   a_row_host = new int   [N+1];
-  a_col_host = new int   [cnt];
+  a_col_host = new int   [nnz];
   a_dia_host = new int   [N];
-  a_val_host = new double[cnt];
+  a_val_host = new double[nnz];
   cudaMalloc(&a_row, (N+1) * sizeof(int));
-  cudaMalloc(&a_col,  cnt  * sizeof(int));
+  cudaMalloc(&a_col,  nnz  * sizeof(int));
   cudaMalloc(&a_dia,  N    * sizeof(int));
-  cudaMalloc(&a_val,  cnt  * sizeof(double));
+  cudaMalloc(&a_val,  nnz  * sizeof(double));
   cudaMalloc(&x,      N    * sizeof(double));
   cudaMalloc(&b,      N    * sizeof(double));
 
@@ -186,11 +189,26 @@ extern "C" int call_amgx_(const int & NX,
   // Final entry in a_row
   a_row_host[N] = pos;
 
+  ///////////////////////////////////////////////////
+  //
+  // Super simple checks for passed Fortran arrays
+  //
+  ///////////////////////////////////////////////////
+  for(int c = 0; c <= N; c++) {
+    assert(a_row_host[c] - a_row_host_fortran[c] == -1);
+  }
+  for(int i = 0; i < nnz; i++) {
+    assert(a_col_host[i] - a_col_host_fortran[i] == -1);
+  }
+  for(int c = 0; c < N; c++) {
+    assert(a_dia_host[c] - a_dia_host_fortran[c] == -1);
+  }
+
   // Copy the entire matrix to the device
   cudaMemcpy(a_row, a_row_host, (N+1) * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_col, a_col_host,  cnt  * sizeof(int),    cudaMemcpyHostToDevice);
+  cudaMemcpy(a_col, a_col_host,  nnz  * sizeof(int),    cudaMemcpyHostToDevice);
   cudaMemcpy(a_dia, a_dia_host,  N    * sizeof(int),    cudaMemcpyHostToDevice);
-  cudaMemcpy(a_val, a_val_host,  cnt  * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(a_val, a_val_host,  nnz  * sizeof(double), cudaMemcpyHostToDevice);
 
   // Fill the vector x
   #pragma acc parallel loop deviceptr(x)
@@ -257,7 +275,7 @@ extern "C" int call_amgx_(const int & NX,
 
   // Upload CSR matrix to AMGX (device)
   check_amgx(AMGX_matrix_upload_all(
-               A_dev, N, cnt, 1, 1, a_row, a_col, a_val, nullptr),
+               A_dev, N, nnz, 1, 1, a_row, a_col, a_val, nullptr),
                "AMGX_matrix_upload_all");
 
   printf("Matrix uploaded to AMGX.\n");
