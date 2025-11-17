@@ -1,4 +1,7 @@
 #include <cstdio>
+#include <fstream>
+#include <iterator>
+#include <string>
 #include <amgx_c.h>
 #include <cuda_runtime.h>
 
@@ -105,25 +108,18 @@ extern "C" int call_amgx_(const int    & N,
   AMGX_vector_handle    b_dev = nullptr;
   AMGX_solver_handle    slv   = nullptr;
 
-  // Simple JSON config: PCG + Jacobi
-  const char *cfg_str =
-    "{\n"
-    "  \"config_version\": 2,\n"
-    "  \"solver\": {\n"
-    "    \"solver\": \"PCG\",\n"
-    "    \"preconditioner\": {\n"
-    "      \"solver\": \"BLOCK_JACOBI\"\n"
-    "    },\n"
-    "    \"max_iters\": 100,\n"
-    "    \"tolerance\": 1e-6,\n"
-    "    \"norm\": \"L2\",\n"
-    "    \"monitor_residual\": 1,\n"
-    "    \"print_solve_stats\": 1,\n"
-    "    \"obtain_timings\": 1\n"
-    "  }\n"
-    "}";
+  // Read .json file ...
+  std::ifstream in("amgx.json");
+  std::string cfg_json((std::istreambuf_iterator<char>(in)),
+                        std::istreambuf_iterator<char>());
+  if(!in) {
+    std::fprintf(stderr, "Could not open amgx.json\n");
+    std::exit(EXIT_FAILURE);
+  }
 
-  check_amgx(AMGX_config_create(&cfg, cfg_str), "AMGX_config_create");
+  // ... and create config
+  check_amgx(AMGX_config_create(&cfg, cfg_json.c_str()),
+             "AMGX_config_create");
 
   // Simple resources: single GPU, device 0
   check_amgx(AMGX_resources_create_simple(&rsrc, cfg),

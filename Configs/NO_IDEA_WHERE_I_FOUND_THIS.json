@@ -1,0 +1,15 @@
+{
+    "config_version": 2,
+    "solver": {
+        "solver": "PCG",
+        "preconditioner": {
+            "solver": "BLOCK_JACOBI"
+        },
+        "max_iters": 100,
+        "tolerance": 1e-6,
+        "norm": "L2",
+        "monitor_residual": 1,
+        "print_solve_stats": 1,
+        "obtain_timings": 1
+    }
+}
