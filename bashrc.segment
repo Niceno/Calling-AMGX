@@ -1,0 +1,69 @@
+#----------------
+# Nvidia HPC SDK
+#----------------
+echo "Setting the use_nvidia command for initializing Nvidia HPC SDK"
+use_nvidia() {
+
+  echo "Initializing Nvidia HPC SDK settings"
+
+  # Store old values
+  export PATH_WITHOUT_NVHPC="$PATH"
+  export LD_LIBRARY_PATH_WITHOUT_NVHPC="$LD_LIBRARY_PATH"
+
+  # Set Nvidia's SDK root directory and platform
+  export NVHPC_ROOT=/opt/nvidia/hpc_sdk
+  export NVHPC_PLAT=Linux_x86_64
+
+  # If user didn’t set NVHPC_VER, auto-detect latest one
+  if [ -z "$NVHPC_VER" ]; then
+    export NVHPC_VER=$(
+      ls "$NVHPC_ROOT/$NVHPC_PLAT" 2>/dev/null \
+        | grep -E '^[0-9]{2}\.[0-9]$' \
+        | sort -V \
+        | tail -1
+      )
+  fi
+
+  # If user didn’t set CUDA_VER, auto-detect latest one under that NVHPC version
+  if [ -z "$CUDA_VER" ]; then
+    export CUDA_VER=$(
+      ls "$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/cuda" 2>/dev/null \
+        | grep -E '^[0-9]{2}\.[0-9]$' \
+        | sort -V \
+        | tail -1
+      )
+  fi
+
+  # Report what you've found
+  echo "Found Nvidia HPC SDK version " $NVHPC_VER
+  echo "Found CUDA version           " $CUDA_VER
+
+  # Set paths for compiler and MPI compiler
+  export PATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/compilers/bin:$PATH
+  export PATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/comm_libs/mpi/bin:$PATH
+
+  # Paths to compiler and MPI compiler libs (are they really needed?)
+  export LD_LIBRARY_PATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/compilers/lib:$LD_LIBRARY_PATH
+  export LD_LIBRARY_PATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/comm_libs/mpi/lib:$LD_LIBRARY_PATH
+
+  # Paths to maths and CUDA libs (needed for AMGX only?)
+  export LD_LIBRARY_PATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/math_libs/$CUDA_VER/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+  export LD_LIBRARY_PATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/cuda/$CUDA_VER/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+
+  # This is library path to Nvidia's AMGX solver
+  export LD_LIBRARY_PATH=/home/niceno/Development/AMGX/build:$LD_LIBRARY_PATH
+
+  # Path to man pages
+  export MANPATH=$NVHPC_ROOT/$NVHPC_PLAT/$NVHPC_VER/compilers/man:$MANPATH
+
+  echo "Nvidia HPC SDK settings have been initialized"
+}
+
+clear_nvidia() {
+
+  # Restore old values
+  export PATH="$PATH_WITHOUT_NVHPC"
+  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH_WITHOUT_NVHPC"
+  unset NVHPC_ROOT
+  echo "Nvidia HPC SDK settings have been cleared."
+}
