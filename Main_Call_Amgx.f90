@@ -125,6 +125,7 @@
   do c = 1, N
     x_f_dev_ptr(c) = 0.0
   end do
+  !$acc end parallel
 
   ! Fill the vector b
   !$acc parallel loop deviceptr(b_f_dev_ptr)
@@ -138,6 +139,7 @@
 
     b_f_dev_ptr(c) = val
   end do
+  !$acc end parallel
 
   !--------------------------!
   !   Call the AMGX solver   !
